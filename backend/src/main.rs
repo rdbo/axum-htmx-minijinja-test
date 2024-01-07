@@ -6,6 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::{PgPool, PgPoolOptions};
+use std::fs::read_to_string;
 use tower_http::services::ServeDir;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug)]
@@ -69,6 +70,19 @@ async fn main() {
 
     let mut templates = minijinja::Environment::new();
     templates.set_loader(minijinja::path_loader("templates"));
+    // NOTE: the code below gives a better benchmark!
+    // templates
+    //     .add_template_owned(
+    //         "index.html",
+    //         read_to_string("templates/index.html").unwrap(),
+    //     )
+    //     .unwrap();
+    // templates
+    //     .add_template_owned(
+    //         "mypage.html",
+    //         read_to_string("templates/mypage.html").unwrap(),
+    //     )
+    //     .unwrap();
 
     let app = Router::new()
         .route("/", get(index))
