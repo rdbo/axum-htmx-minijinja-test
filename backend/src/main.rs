@@ -71,9 +71,9 @@ fn setup_environment(env: &mut minijinja::Environment) -> Option<()> {
 fn setup_environment(env: &mut minijinja::Environment) -> Option<()> {
     use std::fs::read_to_string;
 
-    env.add_template_owned("index.html", read_to_string("templates/index.html").ok()?)
+    env.add_template("index.html", include_str!("../templates/index.html"))
         .ok()?;
-    env.add_template_owned("mypage.html", read_to_string("templates/mypage.html").ok()?)
+    env.add_template("mypage.html", include_str!("../templates/mypage.html"))
         .ok()?;
 
     Some(())
