@@ -6,7 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::{PgPool, PgPoolOptions};
-use std::fs::read_to_string;
+// use std::fs::read_to_string;
 use tower_http::services::ServeDir;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug)]
@@ -60,6 +60,25 @@ async fn rename(Form(form): Form<Rename>) -> impl IntoResponse {
     (headers, Html(form.name))
 }
 
+#[cfg(debug_assertions)]
+fn setup_environment(env: &mut minijinja::Environment) -> Option<()> {
+    env.set_loader(minijinja::path_loader("templates"));
+    Some(())
+}
+
+// Preloading files once is faster (release)
+#[cfg(not(debug_assertions))]
+fn setup_environment(env: &mut minijinja::Environment) -> Option<()> {
+    use std::fs::read_to_string;
+
+    env.add_template_owned("index.html", read_to_string("templates/index.html").ok()?)
+        .ok()?;
+    env.add_template_owned("mypage.html", read_to_string("templates/mypage.html").ok()?)
+        .ok()?;
+
+    Some(())
+}
+
 #[tokio::main]
 async fn main() {
     let dbpool = PgPoolOptions::new()
@@ -69,20 +88,7 @@ async fn main() {
         .expect("failed to connect to database");
 
     let mut templates = minijinja::Environment::new();
-    templates.set_loader(minijinja::path_loader("templates"));
-    // NOTE: the code below gives a better benchmark!
-    // templates
-    //     .add_template_owned(
-    //         "index.html",
-    //         read_to_string("templates/index.html").unwrap(),
-    //     )
-    //     .unwrap();
-    // templates
-    //     .add_template_owned(
-    //         "mypage.html",
-    //         read_to_string("templates/mypage.html").unwrap(),
-    //     )
-    //     .unwrap();
+    setup_environment(&mut templates).expect("Failed to setup environment");
 
     let app = Router::new()
         .route("/", get(index))
