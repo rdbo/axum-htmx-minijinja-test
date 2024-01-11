@@ -18,7 +18,9 @@ struct User {
 async fn index(
     Extension(mut templates): Extension<Box<minijinja::Environment<'_>>>,
 ) -> Html<String> {
-    templates.clear_templates();
+    if cfg!(debug_assertions) {
+        templates.clear_templates();
+    }
     let template = templates.get_template("index.html").unwrap();
     Html(
         template
@@ -39,7 +41,10 @@ async fn mypage(
         .fetch_all(&dbpool)
         .await
         .unwrap();
-    templates.clear_templates();
+
+    if cfg!(debug_assertions) {
+        templates.clear_templates();
+    }
     let template = templates.get_template("mypage.html").unwrap();
     Html(
         template
