@@ -7,6 +7,8 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 // use std::fs::read_to_string;
+use minijinja::Environment;
+use std::sync::{Mutex, OnceLock};
 use tower_http::services::ServeDir;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug)]
@@ -15,9 +17,8 @@ struct User {
     name: String,
 }
 
-async fn index(
-    Extension(mut templates): Extension<Box<minijinja::Environment<'_>>>,
-) -> Html<String> {
+async fn index() -> Html<String> {
+    let mut templates = environment().lock().unwrap();
     if cfg!(debug_assertions) {
         templates.clear_templates();
     }
@@ -33,15 +34,13 @@ async fn click() -> Html<&'static str> {
     Html("<h2>You clicked the button</h2>")
 }
 
-async fn mypage(
-    Extension(dbpool): Extension<PgPool>,
-    Extension(mut templates): Extension<Box<minijinja::Environment<'_>>>,
-) -> Html<String> {
+async fn mypage(Extension(dbpool): Extension<PgPool>) -> Html<String> {
     let users = sqlx::query_as::<_, User>("SELECT * FROM user_account")
         .fetch_all(&dbpool)
         .await
         .unwrap();
 
+    let mut templates = environment().lock().unwrap();
     if cfg!(debug_assertions) {
         templates.clear_templates();
     }
@@ -69,6 +68,17 @@ async fn rename(Form(form): Form<Rename>) -> impl IntoResponse {
     (headers, Html(form.name))
 }
 
+fn environment() -> &'static Mutex<Environment<'static>> {
+    static ENV: OnceLock<Mutex<Environment>> = OnceLock::new();
+    ENV.get_or_init(|| {
+        let mut env = Environment::new();
+        env.set_loader(minijinja::path_loader("templates"));
+
+        let mutex = Mutex::new(env);
+        mutex
+    })
+}
+
 #[tokio::main]
 async fn main() {
     let dbpool = PgPoolOptions::new()
@@ -77,19 +87,12 @@ async fn main() {
         .await
         .expect("failed to connect to database");
 
-    let mut templates = minijinja::Environment::new();
-    templates.set_loader(minijinja::path_loader("templates"));
-
-    let env_box = Box::new(templates); // WARN: Maybe a Mutex should be used, because we will clear templates on every `render()`
-                                       // which could cause a race condition
-
     let app = Router::new()
         .route("/", get(index))
         .route("/click", post(click))
         .route("/rename", post(rename))
         .route("/mypage", get(mypage))
         .layer(Extension(dbpool))
-        .layer(Extension(env_box))
         .fallback_service(ServeDir::new("static"));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
